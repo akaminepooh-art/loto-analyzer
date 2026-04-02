@@ -9,7 +9,7 @@ const games: GameType[] = ['loto6', 'loto7', 'miniloto'];
 
 export default function GameSelector({ current, onChange }: GameSelectorProps) {
   return (
-    <div className="flex gap-1 bg-bg-primary/50 rounded-lg p-1">
+    <div className="flex gap-1.5 rounded-xl p-1.5 flex-1" style={{ background: 'rgba(0,0,0,0.2)' }}>
       {games.map(id => {
         const cfg = GAME_CONFIGS[id];
         const isActive = current === id;
@@ -17,15 +17,18 @@ export default function GameSelector({ current, onChange }: GameSelectorProps) {
           <button
             key={id}
             onClick={() => onChange(id)}
-            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+            className={`flex-1 px-2 sm:px-3 py-3 rounded-xl text-sm sm:text-base font-bold transition-all min-h-[48px] whitespace-nowrap ${
               isActive
-                ? 'text-white shadow-sm'
+                ? 'text-white shadow-lg scale-[1.02]'
                 : 'text-text-secondary hover:text-text-primary'
             }`}
-            style={isActive ? { backgroundColor: cfg.color } : undefined}
+            style={isActive ? {
+              backgroundColor: cfg.color,
+              boxShadow: `0 0 20px ${cfg.color}40, 0 4px 15px rgba(0,0,0,0.3)`,
+            } : undefined}
           >
             <span className="mr-1">{cfg.emoji}</span>
-            <span className="hidden sm:inline">{cfg.name}</span>
+            {cfg.name}
           </button>
         );
       })}

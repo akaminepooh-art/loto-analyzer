@@ -5,11 +5,14 @@ import {
   calcOddEven, calcTrend, getHotCold,
 } from '../lib/analysis';
 import LotoBall from '../components/LotoBall';
+import GlassCard from '../components/GlassCard';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, LineChart, Line,
   PieChart, Pie, Cell,
 } from 'recharts';
+
+const tooltipStyle = { background: 'rgba(15,20,50,0.9)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 8, color: '#f1f5f9' };
 
 interface Props { data: LotoResult[]; config: GameConfig }
 
@@ -28,30 +31,32 @@ export default function AnalysisPage({ data, config }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 bg-bg-card rounded-lg p-1 border border-border">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 px-2 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors text-center ${
-              tab === t.id
-                ? 'bg-accent text-bg-primary'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-card-hover'
-            }`}
-          >
-            <span className="sm:hidden">{t.icon}</span>
-            <span className="hidden sm:inline">{t.label}</span>
-          </button>
-        ))}
-      </div>
+      <GlassCard className="p-1.5">
+        <div className="flex gap-1.5">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 px-2 sm:px-4 py-3 rounded-md text-sm sm:text-base font-bold transition-colors text-center min-h-[44px] ${
+                tab === t.id
+                  ? 'bg-accent text-bg-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
+              }`}
+            >
+              <span className="sm:hidden">{t.icon}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </GlassCard>
 
-      <div className="bg-bg-card rounded-xl p-6 border border-border min-h-[400px]">
+      <GlassCard className="p-5 sm:p-6 min-h-[400px]">
         {tab === 'frequency' && <FrequencyTab data={data} config={config} range={freqRange} setRange={setFreqRange} />}
         {tab === 'gap' && <GapTab data={data} config={config} />}
         {tab === 'pair' && <PairTab data={data} config={config} />}
         {tab === 'sum' && <SumTab data={data} config={config} />}
         {tab === 'trend' && <TrendTab data={data} config={config} />}
-      </div>
+      </GlassCard>
     </div>
   );
 }
@@ -70,14 +75,14 @@ function FrequencyTab({ data, config, range, setRange }: { data: LotoResult[]; c
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">出現頻度分析</h3>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-lg font-bold">出現頻度分析</h3>
         <div className="flex gap-1">
           {rangeOptions.map(o => (
             <button
               key={o.value}
               onClick={() => setRange(o.value)}
-              className={`px-3 py-1 rounded text-xs font-medium ${
+              className={`px-3 py-2 rounded text-sm font-bold min-h-[36px] ${
                 range === o.value ? 'bg-accent text-bg-primary' : 'bg-bg-card-hover text-text-secondary'
               }`}
             >
@@ -89,10 +94,10 @@ function FrequencyTab({ data, config, range, setRange }: { data: LotoResult[]; c
 
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={freq}>
-          <XAxis dataKey="number" tick={{ fill: '#94a3b8', fontSize: 10 }} interval={1} />
+          <XAxis dataKey="number" tick={{ fill: '#94a3b8', fontSize: 11 }} interval={1} />
           <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
           <Tooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+            contentStyle={tooltipStyle}
             formatter={(v: any, _: any, entry: any) => [
               `${v}回 (${entry.payload.percentage.toFixed(1)}%)`, '出現回数'
             ]}
@@ -113,23 +118,23 @@ function FrequencyTab({ data, config, range, setRange }: { data: LotoResult[]; c
         </BarChart>
       </ResponsiveContainer>
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <h4 className="text-hot font-medium mb-2">🔥 ホット TOP 5</h4>
+          <h4 className="text-hot font-bold mb-2 text-base">🔥 ホット TOP 5</h4>
           <div className="flex flex-wrap gap-2">
             {hot.map(h => (
-              <div key={h.number} className="flex items-center gap-1">
-                <LotoBall number={h.number} size="sm" maxNumber={config.maxNumber} /><span className="text-xs text-text-secondary">{h.count}</span>
+              <div key={h.number} className="flex items-center gap-1.5">
+                <LotoBall number={h.number} size="sm" maxNumber={config.maxNumber} /><span className="text-sm text-text-secondary">{h.count}</span>
               </div>
             ))}
           </div>
         </div>
         <div>
-          <h4 className="text-cold font-medium mb-2">❄️ コールド TOP 5</h4>
+          <h4 className="text-cold font-bold mb-2 text-base">❄️ コールド TOP 5</h4>
           <div className="flex flex-wrap gap-2">
             {cold.map(c => (
-              <div key={c.number} className="flex items-center gap-1">
-                <LotoBall number={c.number} size="sm" maxNumber={config.maxNumber} /><span className="text-xs text-text-secondary">{c.count}</span>
+              <div key={c.number} className="flex items-center gap-1.5">
+                <LotoBall number={c.number} size="sm" maxNumber={config.maxNumber} /><span className="text-sm text-text-secondary">{c.count}</span>
               </div>
             ))}
           </div>
@@ -149,8 +154,8 @@ function GapTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">出現間隔（ギャップ）分析</h3>
-      <p className="text-sm text-text-secondary">
+      <h3 className="text-lg font-bold">出現間隔（ギャップ）分析</h3>
+      <p className="text-base text-text-secondary">
         各番号が最後に出現してからの回数。平均間隔より長い番号は「出やすい」可能性があります。
       </p>
 
@@ -159,7 +164,7 @@ function GapTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
           <XAxis dataKey="number" tick={{ fill: '#94a3b8', fontSize: 10 }} interval={1} />
           <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
           <Tooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+            contentStyle={tooltipStyle}
             formatter={(v: any, name: any) => [
               `${v.toFixed(1)}回`,
               name === 'currentGap' ? '現在のギャップ' : '平均ギャップ'
@@ -172,8 +177,8 @@ function GapTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
       </ResponsiveContainer>
 
       <div>
-        <h4 className="text-sm font-medium text-text-secondary mb-2">ヒートマップ（赤=長期未出現）</h4>
-        <div className="grid grid-cols-7 sm:grid-cols-11 gap-1">
+        <h4 className="text-base font-bold text-text-secondary mb-2">ヒートマップ（赤=長期未出現）</h4>
+        <div className="grid grid-cols-7 sm:grid-cols-11 gap-1.5">
           {gaps.map(g => {
             const intensity = Math.min(1, g.currentGap / Math.max(1, g.averageGap * 2));
             const r = Math.round(59 + intensity * 196);
@@ -181,7 +186,7 @@ function GapTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
             return (
               <div
                 key={g.number}
-                className="aspect-square flex items-center justify-center rounded text-xs font-mono text-white"
+                className="aspect-square flex items-center justify-center rounded text-sm font-bold text-white min-h-[36px]"
                 style={{ background: `rgb(${r},${gb},${gb})` }}
                 title={`番号${g.number}: ${g.currentGap}回未出現 (平均${g.averageGap.toFixed(1)})`}
               >
@@ -201,15 +206,15 @@ function PairTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">ペア分析</h3>
-      <p className="text-sm text-text-secondary">よく一緒に出現する番号のペア TOP 20</p>
+      <h3 className="text-lg font-bold">ペア分析</h3>
+      <p className="text-base text-text-secondary">よく一緒に出現する番号のペア TOP 20</p>
 
       <ResponsiveContainer width="100%" height={350}>
         <BarChart data={pairs} layout="vertical">
           <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-          <YAxis type="category" dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} width={50} />
+          <YAxis type="category" dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} width={55} />
           <Tooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+            contentStyle={tooltipStyle}
             formatter={(v: any) => [`${v}回`, '共出現回数']}
           />
           <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
@@ -228,16 +233,16 @@ function SumTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold">合計値の分布</h3>
-        <p className="text-sm text-text-secondary mb-3">
+        <h3 className="text-lg font-bold">合計値の分布</h3>
+        <p className="text-base text-text-secondary mb-3">
           平均: {sumStats.mean.toFixed(1)} / 標準偏差: {sumStats.stddev.toFixed(1)} / 範囲: {sumStats.min}〜{sumStats.max}
         </p>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={sumStats.distribution}>
-            <XAxis dataKey="range" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+            <XAxis dataKey="range" tick={{ fill: '#94a3b8', fontSize: 11 }} />
             <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
             <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+              contentStyle={tooltipStyle}
             />
             <Bar dataKey="count" fill={config.color} radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -245,7 +250,7 @@ function SumTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
       </div>
 
       <div>
-        <h3 className="text-lg font-semibold mb-3">奇数・偶数の比率</h3>
+        <h3 className="text-lg font-bold mb-3">奇数・偶数の比率</h3>
         <ResponsiveContainer width="100%" height={250}>
           <PieChart>
             <Pie
@@ -262,7 +267,7 @@ function SumTab({ data, config }: { data: LotoResult[]; config: GameConfig }) {
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+              contentStyle={tooltipStyle}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -305,13 +310,13 @@ function TrendTab({ data, config }: { data: LotoResult[]; config: GameConfig }) 
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">トレンド分析（50回移動平均）</h3>
-      <div className="flex flex-wrap gap-1">
+      <h3 className="text-lg font-bold">トレンド分析（50回移動平均）</h3>
+      <div className="flex flex-wrap gap-1.5">
         {Array.from({ length: config.maxNumber }, (_, i) => i + 1).map(num => (
           <button
             key={num}
             onClick={() => toggleNum(num)}
-            className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
+            className={`w-9 h-9 rounded text-sm font-bold transition-colors min-h-[36px] ${
               selectedNums.includes(num)
                 ? 'bg-accent text-bg-primary'
                 : 'bg-bg-card-hover text-text-secondary hover:text-text-primary'
@@ -321,15 +326,15 @@ function TrendTab({ data, config }: { data: LotoResult[]; config: GameConfig }) 
           </button>
         ))}
       </div>
-      <p className="text-xs text-text-secondary">番号をクリックして表示/非表示（最大5つ）</p>
+      <p className="text-sm text-text-secondary">番号をクリックして表示/非表示（最大5つ）</p>
 
       {trendData.length > 0 ? (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={trendData}>
-            <XAxis dataKey="round" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+            <XAxis dataKey="round" tick={{ fill: '#94a3b8', fontSize: 11 }} />
             <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="%" />
             <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+              contentStyle={tooltipStyle}
               formatter={(v: any, name: any) => [`${v.toFixed(1)}%`, `番号 ${name.slice(1)}`]}
             />
             {selectedNums.map((num, i) => (
@@ -345,7 +350,7 @@ function TrendTab({ data, config }: { data: LotoResult[]; config: GameConfig }) 
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        <p className="text-text-secondary text-sm text-center py-8">データが不足しています（60回以上必要）</p>
+        <p className="text-text-secondary text-base text-center py-8">データが不足しています（60回以上必要）</p>
       )}
     </div>
   );

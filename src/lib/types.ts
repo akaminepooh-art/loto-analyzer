@@ -10,7 +10,6 @@ export interface GameConfig {
   drawDayOfWeek: number;
   color: string;
   colorLight: string;
-  csvUrl: string;
   emoji: string;
 }
 
@@ -25,7 +24,7 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     drawDayOfWeek: 4,
     color: '#F59E0B',
     colorLight: '#FBBF24',
-    csvUrl: 'https://loto6.thekyo.jp/data/loto6.csv',
+
     emoji: '🎱',
   },
   loto7: {
@@ -38,7 +37,7 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     drawDayOfWeek: 5,
     color: '#3B82F6',
     colorLight: '#60A5FA',
-    csvUrl: 'https://loto7.thekyo.jp/data/loto7.csv',
+
     emoji: '🍀',
   },
   miniloto: {
@@ -51,7 +50,7 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     drawDayOfWeek: 2,
     color: '#10B981',
     colorLight: '#34D399',
-    csvUrl: 'https://miniloto.thekyo.jp/data/miniloto.csv',
+
     emoji: '✨',
   },
 };
@@ -104,7 +103,7 @@ export interface OddEvenStats {
 export interface Prediction {
   id: string;
   numbers: number[];
-  method: 'statistical' | 'lstm' | 'ensemble';
+  method: 'statistical' | 'ai' | 'fortune';
   confidence: number;
   reasoning: string;
   createdAt: string;
@@ -112,7 +111,7 @@ export interface Prediction {
 }
 
 export interface PredictionConfig {
-  method: 'statistical' | 'lstm' | 'ensemble';
+  method: 'statistical' | 'ai' | 'fortune';
   mustInclude: number[];
   mustExclude: number[];
   weights: {
@@ -123,4 +122,42 @@ export interface PredictionConfig {
   };
 }
 
-export type PageId = 'dashboard' | 'analysis' | 'prediction' | 'history';
+export type PageId = 'dashboard' | 'analysis' | 'prediction' | 'history' | 'fortune' | 'legal';
+
+// 占い関連型
+export interface BirthDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export interface NumerologyProfile {
+  lifePath: number;
+  birthNumber: number;
+  personalYear: number;
+  personalMonth: number;
+  personalDay: number;
+  systemName: string;
+  systemTitle: string;
+  element: string;
+  description: string;
+  color: string;
+  emoji: string;
+  coreNumbers: number[];
+}
+
+export interface DailyFortune {
+  date: string;
+  score: number;
+  rokuyo: string;
+  label: string;
+  message: string;
+  luckyNumbers: number[];
+  gameType?: GameType;
+}
+
+export interface LuckyNumberResult {
+  numbers: number[];
+  reasoning: string[];
+  profile: NumerologyProfile;
+}

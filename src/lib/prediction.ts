@@ -166,7 +166,7 @@ export async function predictLSTM(
   const recentResults = results.slice(-200);
   const seqLen = Math.min(20, Math.floor(recentResults.length * 0.5));
   if (recentResults.length < seqLen + 10) {
-    return predictStatistical(results, { ...config, method: 'lstm' }, gameConfig);
+    return predictStatistical(results, { ...config, method: 'ai' }, gameConfig);
   }
 
   const probs = await trainLSTMAndPredict(recentResults, gameConfig, onProgress);
@@ -185,71 +185,21 @@ export async function predictLSTM(
   return {
     id: crypto.randomUUID(),
     numbers,
-    method: 'lstm',
+    method: 'ai',
     confidence: 0.1 + Math.random() * 0.15,
-    reasoning: `LSTM ニューラルネットワーク（直近${seqLen}回の時系列パターンを学習・10エポック）`,
+    reasoning: `AI ニューラルネットワーク（直近${seqLen}回の時系列パターンを学習・10エポック）`,
     createdAt: new Date().toISOString(),
   };
 }
 
 /**
- * アンサンブル予測
+ * AI予測（LSTMのエイリアス）
  */
-export async function predictEnsemble(
+export async function predictAI(
   results: LotoResult[],
   config: PredictionConfig,
   gameConfig: GameConfig,
   onProgress?: (epoch: number, total: number) => void
 ): Promise<Prediction> {
-  const { maxNumber, pickCount } = gameConfig;
-
-  const freq = calcFrequency(results, gameConfig);
-  const gaps = calcGaps(results, gameConfig);
-  const statScores = new Array(maxNumber).fill(0);
-  for (let i = 0; i < maxNumber; i++) {
-    const num = i + 1;
-    const f = freq.find(f => f.number === num)!;
-    const g = gaps.find(g => g.number === num)!;
-    statScores[i] = (f.count / Math.max(1, f.expected)) * 0.5 +
-      (g.currentGap / Math.max(1, g.averageGap)) * 0.5;
-  }
-
-  const maxStat = Math.max(...statScores);
-  const normStat = statScores.map(s => s / maxStat);
-
-  const recentResults = results.slice(-200);
-  const seqLen = Math.min(20, Math.floor(recentResults.length * 0.5));
-  let lstmProbs: number[];
-
-  if (recentResults.length >= seqLen + 10) {
-    lstmProbs = await trainLSTMAndPredict(recentResults, gameConfig, onProgress);
-  } else {
-    lstmProbs = new Array(maxNumber).fill(1 / maxNumber);
-  }
-
-  const maxLstm = Math.max(...lstmProbs);
-  const normLstm = lstmProbs.map(p => p / maxLstm);
-
-  const ensemble = normStat.map((s, i) => ({
-    num: i + 1,
-    score: 0.5 * s + 0.5 * normLstm[i],
-  }));
-
-  const filtered = ensemble.filter(e => !config.mustExclude.includes(e.num));
-  const selected = new Set(config.mustInclude);
-  filtered.sort((a, b) => b.score - a.score);
-  for (const e of filtered) {
-    if (selected.size >= pickCount) break;
-    if (!selected.has(e.num)) selected.add(e.num);
-  }
-
-  const numbers = Array.from(selected).sort((a, b) => a - b);
-  return {
-    id: crypto.randomUUID(),
-    numbers,
-    method: 'ensemble',
-    confidence: 0.12 + Math.random() * 0.13,
-    reasoning: '統計分析スコアと LSTM 出力の加重平均によるアンサンブル予測',
-    createdAt: new Date().toISOString(),
-  };
+  return predictLSTM(results, config, gameConfig, onProgress);
 }
