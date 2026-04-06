@@ -1,347 +1,165 @@
-# ロト系アナライザー — Claude Code 引き継ぎ＆設計仕様書
+# ロト アナライザー — Claude Code 引き継ぎ＆設計仕様書
 
 ## プロジェクト概要
 
-日本のロト系宝くじ（ロト6・ロト7・ミニロト）の過去の抽選結果を統計分析し、次回の番号を予測するWebアプリ。
-クライアントサイド完結（TensorFlow.js）で、Netlifyにデプロイする想定。
+日本のロト系宝くじ（ロト6・ロト7・ミニロト）の過去の抽選結果を統計分析・AI予測・数秘術占いで
+次回の番号を予測するWebアプリ。クライアントサイド完結（TensorFlow.js）。
 
-**現在の状態**: ロト6のみ実装済み。ロト7・ミニロトを統合する拡張が必要。
+**URL**: https://loto-analyzer.netlify.app
+**GitHub**: https://github.com/akaminepooh-art/loto-analyzer
 
 ## 技術スタック
 
 - **フロントエンド**: React 19 + TypeScript + Vite 8 + Tailwind CSS 4
 - **ML**: TensorFlow.js（LSTM、ブラウザ内学習・推論）
 - **チャート**: Recharts 3
-- **データ取得**: Netlify Functions（CORS回避用プロキシ）
+- **データ**: 自前ホスティング（public/data/*.json）+ Supabase
 - **キャッシュ**: localStorage（6時間TTL、ゲーム種別ごとに分離）
+- **デプロイ**: Netlify（GitHub連携自動デプロイ）
 
----
+## Supabase 接続情報
 
-## Part 1: 現在の実装（ロト6単体）
+- **プロジェクト**: koei-analyzer（公営競技共有）
+- **URL**: https://jvikgmqtzprwsxozulvx.supabase.co
+- **テーブル**: loto_draws
+  - draw_type (loto6/loto7/miniloto)
+  - draw_no, draw_date
+  - numbers (INTEGER[]), bonus_numbers (INTEGER[])
+  - prize_1, winners_1, prize_2, winners_2, prize_3, winners_3
+  - carryover
+- **フロントのキー**: VITE_SUPABASE_ANON_KEY（.env参照）
+- **スクリプトのキー**: SUPABASE_SERVICE_KEY（GitHub Secrets参照）
 
-### ディレクトリ構成
+## データ取得フロー
+
+### フロントエンド（useLotoData.ts）
+```
+1. localStorage キャッシュ確認（6時間TTL）
+2. Supabase loto_draws テーブルから取得
+3. 静的JSON（/data/{game}.json）から取得
+4. サンプルデータ（フォールバック）
+```
+
+### データ更新（scripts/update-data.mjs）
+```
+GitHub Actions（水・金・土 9:00 JST）
+  → thekyo.jp から CSV 取得
+  → public/data/*.json に保存
+  → Supabase loto_draws に upsert
+  → git commit & push
+  → Netlify 自動デプロイ
+```
+
+## ディレクトリ構成
 
 ```
-loto6-predictor/
-├── index.html              # lang="ja", emoji favicon
-├── netlify.toml            # ビルド設定・リダイレクト・セキュリティヘッダ
+loto-analyzer/
+├── index.html              # noscript フォールバック付き
+├── netlify.toml            # ビルド設定・ヘッダー・リダイレクト
 ├── package.json
-├── vite.config.ts
-├── tsconfig.app.json       # verbatimModuleSyntax=false, noUnusedLocals=false
-├── netlify/
-│   └── functions/
-│       └── fetch-results.ts  # CSV取得プロキシ（mk-mode.com + フォールバック）
+├── .env                    # Supabase接続（gitignore対象）
+├── .env.example            # テンプレート
+├── .github/
+│   └── workflows/
+│       └── update-loto-data.yml  # 週3回自動データ更新
+├── scripts/
+│   └── update-data.mjs     # データ取得・JSON保存・Supabase同期
+├── public/
+│   ├── data/               # 静的JSON（loto6/loto7/miniloto）
+│   ├── images/             # AI生成背景画像（5枚）
+│   ├── ogp.png             # OGP画像
+│   ├── ads.txt             # AdSense認証
+│   ├── robots.txt
+│   └── sitemap.xml
 ├── src/
 │   ├── main.tsx
-│   ├── App.tsx             # ページルーティング（state管理）、ローディング、エラー
-│   ├── index.css           # Tailwindインポート、カスタムテーマ（ダークネイビー＋アンバー）
+│   ├── App.tsx             # gameType state、スワイプ切り替え、テーマカラー
+│   ├── index.css           # ダーク/ライトテーマ、背景画像、グラスモーフィズム
 │   ├── lib/
-│   │   ├── types.ts        # LotoResult, FrequencyData, PredictionConfig, PageId等
-│   │   ├── analysis.ts     # 統計分析（頻度、ギャップ、ペア、合計、奇偶、連番、トレンド）
-│   │   ├── prediction.ts   # 3つの予測手法（統計、LSTM、アンサンブル）
-│   │   └── sampleData.ts   # Netlify Function不通時のフォールバックデータ
+│   │   ├── types.ts        # GameType, GameConfig, GAME_CONFIGS, 占い関連型
+│   │   ├── analysis.ts     # 統計分析（8関数、config引数対応）
+│   │   ├── prediction.ts   # 3予測手法（統計・AI・運勢）
+│   │   ├── sampleData.ts   # フォールバックデータ生成
+│   │   ├── supabase.ts     # Supabase クライアント
+│   │   ├── fortune.ts      # 数秘術占いロジック
+│   │   ├── numerology-data.ts # 数秘術プロフィールデータ
+│   │   ├── rokuyo.ts       # 六曜判定
+│   │   └── kichijitsu.ts   # 吉日判定（一粒万倍日・天赦日等）
 │   ├── hooks/
-│   │   └── useLotoData.ts  # データ取得フック（localStorage 6時間キャッシュ）
+│   │   └── useLotoData.ts  # データ取得（Supabase→静的JSON→サンプル）
 │   ├── components/
-│   │   ├── Header.tsx      # ハンバーガーメニュー（モバイル対応）
-│   │   ├── LotoBall.tsx    # 番号ボール（範囲別色分け、レスポンシブサイズ）
-│   │   └── Disclaimer.tsx  # 免責事項表示
+│   │   ├── Header.tsx      # ゲームセレクター＋テーマ切替＋TOP
+│   │   ├── GameSelector.tsx # タブ型ゲーム選択
+│   │   ├── LotoBall.tsx    # 番号ボール（動的カラーリング）
+│   │   ├── GlassCard.tsx   # グラスモーフィズムカード
+│   │   ├── BirthDateInput.tsx # 年月日セレクトボックス
+│   │   ├── FortuneCard.tsx # 占い結果カード
+│   │   ├── FortuneCalendar.tsx # 購入おすすめ日カレンダー
+│   │   ├── ShareQR.tsx     # QRコード共有
+│   │   ├── AdSlot.tsx      # AdSense広告枠（フラグ制御）
+│   │   ├── CookieConsent.tsx # Cookie同意バナー
+│   │   └── Disclaimer.tsx  # 免責事項
 │   └── pages/
-│       ├── DashboardPage.tsx   # 最新結果、頻度チャート、ホット/コールド、カウントダウン
-│       ├── AnalysisPage.tsx    # 5タブ分析（頻度、ギャップ、ペア、合計分布、トレンド）
-│       ├── PredictionPage.tsx  # 3予測手法、設定カスタマイズ、予測履歴
-│       └── HistoryPage.tsx     # ページネーション付き結果テーブル、検索機能
-└── dist/                   # ビルド済み（Netlifyドラッグ&ドロップ用）
+│       ├── DashboardPage.tsx   # ホーム（最新結果・頻度・ホット/コールド）
+│       ├── AnalysisPage.tsx    # 5タブ分析
+│       ├── PredictionPage.tsx  # 統計・AI・運勢の3柱予測
+│       ├── FortunePage.tsx     # 占い（数秘術プロフィール・カレンダー）
+│       ├── HistoryPage.tsx     # 抽選履歴
+│       └── LegalPage.tsx       # プライバシーポリシー・利用規約・免責
 ```
 
-### 解決済みの技術的問題
+## ゲームパラメータ
 
-#### LSTM UIフリーズ対策
-- `yieldToMain()` ヘルパーでエポック間にメインスレッドを解放
-- モデル軽量化: units 64→32, epochs 30→10, seqLen 30→20
-- 学習データを直近200件に制限 (`results.slice(-200)`)
+| ゲーム | 番号範囲 | 選択数 | ボーナス | 抽選日 | テーマカラー |
+|--------|----------|--------|----------|--------|------------|
+| ロト6 | 1〜43 | 6個 | 1個 | 毎週木曜 | #F59E0B (amber) |
+| ロト7 | 1〜37 | 7個 | 2個 | 毎週金曜 | #3B82F6 (blue) |
+| ミニロト | 1〜31 | 5個 | 1個 | 毎週火曜 | #10B981 (emerald) |
 
-#### TypeScript設定
-`tsconfig.app.json` で以下を設定済み（変更しないこと）:
-- `verbatimModuleSyntax: false`
-- `noUnusedLocals: false`
-- `noUnusedParameters: false`
+## 予測の3柱
 
-### ハードコードされた定数（要リファクタリング箇所）
+| 手法 | method値 | 内容 |
+|------|---------|------|
+| 統計予測 | statistical | 頻度・ギャップ・ペア分析ベースの重み付け選出 |
+| AI予測 | ai | TensorFlow.js LSTM（ブラウザ内学習・推論） |
+| 運勢予測 | fortune | 数秘術（ライフパス数・個人日数）ベースのラッキーナンバー |
 
-以下のファイルに `TOTAL_NUMBERS = 43` と `PICK_COUNT = 6` がハードコードされている:
-- `src/lib/analysis.ts` （2行目〜3行目）
-- `src/lib/prediction.ts` （4行目〜5行目）
+## AdSense
 
-`LotoBall.tsx` のカラーリング（1-9赤、10-19青、20-29緑、30-39橙、40-43紫）もロト6固定。
+- パブリッシャーID: ca-pub-4671107688556806
+- 広告コンポーネント: AdSlot.tsx（AD_ENABLED フラグで制御）
+- 審査通過後にフラグを true に変更して有効化
 
----
+## Netlify 設定
 
-## Part 2: ロト系統合 設計仕様
+- Site ID: e262a235-4b68-4bec-bc22-c92423302811
+- GitHub連携: akaminepooh-art/loto-analyzer (main)
+- ビルド: npm run build → dist/
 
-### 2.1 対象ゲームとパラメータ
+## GitHub Secrets（要設定）
 
-| ゲーム | 番号範囲 | 選択数 | ボーナス | 抽選日 | データソース |
-|--------|----------|--------|----------|--------|-------------|
-| ロト6 | 1〜43 | 6個 | 1個 | 毎週木曜 | mk-mode.com/loto6 |
-| ロト7 | 1〜37 | 7個 | 2個 | 毎週金曜 | mk-mode.com/loto7 |
-| ミニロト | 1〜31 | 5個 | 1個 | 毎週火曜 | mk-mode.com/miniloto |
+GitHub Actions でSupabase同期を有効にするには:
+- `SUPABASE_URL`: https://jvikgmqtzprwsxozulvx.supabase.co
+- `SUPABASE_SERVICE_KEY`: Service Role Key
 
-### 2.2 GameConfig 型の追加（types.ts）
+## Netlify 環境変数（要設定）
 
-```typescript
-export type GameType = 'loto6' | 'loto7' | 'miniloto';
-
-export interface GameConfig {
-  id: GameType;
-  name: string;           // 表示名: "ロト6", "ロト7", "ミニロト"
-  maxNumber: number;       // 番号範囲の上限: 43, 37, 31
-  pickCount: number;       // 選択する番号数: 6, 7, 5
-  bonusCount: number;      // ボーナス数の個数: 1, 2, 1
-  drawDay: string;         // 抽選曜日: "木曜", "金曜", "火曜"
-  drawDayOfWeek: number;   // 0=日〜6=土: 4, 5, 2
-  color: string;           // テーマカラー（UIアクセント）
-  csvEndpoint: string;     // Netlify Function のエンドポイントパス
-}
-
-export const GAME_CONFIGS: Record<GameType, GameConfig> = {
-  loto6: {
-    id: 'loto6',
-    name: 'ロト6',
-    maxNumber: 43,
-    pickCount: 6,
-    bonusCount: 1,
-    drawDay: '木曜',
-    drawDayOfWeek: 4,
-    color: '#F59E0B',  // amber（現在のアクセント色）
-    csvEndpoint: '/.netlify/functions/fetch-results?game=loto6',
-  },
-  loto7: {
-    id: 'loto7',
-    name: 'ロト7',
-    maxNumber: 37,
-    pickCount: 7,
-    bonusCount: 2,
-    drawDay: '金曜',
-    drawDayOfWeek: 5,
-    color: '#3B82F6',  // blue
-    csvEndpoint: '/.netlify/functions/fetch-results?game=loto7',
-  },
-  miniloto: {
-    id: 'miniloto',
-    name: 'ミニロト',
-    maxNumber: 31,
-    pickCount: 5,
-    bonusCount: 1,
-    drawDay: '火曜',
-    drawDayOfWeek: 2,
-    color: '#10B981',  // emerald
-    csvEndpoint: '/.netlify/functions/fetch-results?game=miniloto',
-  },
-};
-```
-
-### 2.3 LotoResult 型の拡張
-
-```typescript
-export interface LotoResult {
-  round: number;
-  date: string;
-  numbers: number[];
-  bonus: number | number[];  // ロト7はボーナス2個 → number[]
-  firstPrize: number;
-  firstWinners: number;
-  carryover: number;
-  totalSales: number;
-}
-```
-
-### 2.4 リファクタリング方針（ファイル別）
-
-#### src/lib/analysis.ts
-- `TOTAL_NUMBERS` と `PICK_COUNT` を全関数の引数 `config: GameConfig` から取得するように変更
-- 関数シグネチャ例: `calcFrequency(results, config, lastN?)`
-- calcOddEven の `PICK_COUNT` 参照も `config.pickCount` に
-- 全7関数（calcFrequency, calcGaps, calcPairs, calcSumStats, calcOddEven, calcConsecutive, calcTrend）に config を渡す
-
-#### src/lib/prediction.ts
-- `TOTAL_NUMBERS` と `PICK_COUNT` を `config: GameConfig` から取得
-- `predictStatistical(results, config)` — config.maxNumber, config.pickCount を使用
-- `trainLSTMAndPredict(results, config, onProgress)` — LSTM入力次元を config.maxNumber に
-- `predictLSTM(results, config, onProgress)` — 同上
-- `predictEnsemble(results, config, onProgress)` — 同上
-
-#### src/lib/sampleData.ts
-- `generateSampleData(config: GameConfig)` に変更
-- config.maxNumber と config.pickCount でサンプル生成
-
-#### src/hooks/useLotoData.ts
-- `useLotoData(gameType: GameType)` に変更
-- キャッシュキーをゲーム別に分離: `loto6_data`, `loto7_data`, `miniloto_data`
-- フェッチURLを `config.csvEndpoint` から取得
-
-#### src/components/LotoBall.tsx
-- カラーリングをゲームの maxNumber に応じて動的に計算
-- 色帯の分割: `Math.ceil(config.maxNumber / 5)` 個ごとに色を切り替え
-
-#### src/components/Header.tsx
-- ゲーム切り替えタブ（またはセレクタ）をヘッダーに追加
-- 現在選択中のゲーム名を表示
-- 各ゲームのテーマカラーをアクセントに反映
-
-#### src/App.tsx
-- `gameType` state を追加: `useState<GameType>('loto6')`
-- `useLotoData(gameType)` にゲーム種別を渡す
-- 全ページコンポーネントに `config: GameConfig` を props で渡す
-- ゲーム切り替え時にデータを再取得
-
-#### src/pages/*.tsx（全4ページ）
-- props に `config: GameConfig` を追加
-- 表示テキスト中の "ロト6" を `config.name` に
-- カウントダウンの曜日を `config.drawDayOfWeek` から計算
-- 番号範囲を `config.maxNumber` に
-
-#### netlify/functions/fetch-results.ts
-- クエリパラメータ `?game=loto6|loto7|miniloto` で分岐
-- ゲーム別のCSVソースとパーサー:
-
-```typescript
-const GAME_SOURCES: Record<string, { url: string; parse: Function; pickCount: number }[]> = {
-  loto6: [
-    { url: 'https://www.mk-mode.com/rails/loto/loto6/csv', parse: parseMkMode, pickCount: 6 },
-  ],
-  loto7: [
-    { url: 'https://www.mk-mode.com/rails/loto/loto7/csv', parse: parseLoto7, pickCount: 7 },
-  ],
-  miniloto: [
-    { url: 'https://www.mk-mode.com/rails/loto/mini_loto/csv', parse: parseMiniLoto, pickCount: 5 },
-  ],
-};
-```
-
-- ロト7のパーサー: 本数字7個 + ボーナス2個の列構成に対応
-- ミニロト: 本数字5個 + ボーナス1個
-
-### 2.5 UI変更
-
-#### ゲーム切り替えUI
-ヘッダー直下にタブバーを追加:
-```
-[🎯 ロト6] [🍀 ロト7] [✨ ミニロト]
-```
-- 選択中のゲームはアンダーラインとテーマカラーで強調
-- モバイルではコンパクトなピル型ボタン
-- 切り替え時にスムーズなトランジション（データ読み込み中はスピナー）
-
-#### テーマカラーの動的切り替え
-- CSS変数 `--color-accent` をゲームごとに切り替え
-- ロト6: アンバー, ロト7: ブルー, ミニロト: エメラルド
-
-#### ダッシュボードの抽選日カウントダウン
-- `config.drawDayOfWeek` を使って次回抽選日を計算
-
-### 2.6 拡張後のディレクトリ構成
-
-```
-loto-analyzer/                  # ← リネーム推奨
-├── index.html
-├── netlify.toml
-├── package.json
-├── vite.config.ts
-├── tsconfig.app.json
-├── netlify/
-│   └── functions/
-│       └── fetch-results.ts    # ゲーム別分岐対応
-├── src/
-│   ├── main.tsx
-│   ├── App.tsx                 # gameType state追加
-│   ├── index.css               # CSS変数でテーマカラー動的切替
-│   ├── lib/
-│   │   ├── types.ts            # GameType, GameConfig, GAME_CONFIGS 追加
-│   │   ├── analysis.ts         # 全関数にconfig引数追加
-│   │   ├── prediction.ts       # 全関数にconfig引数追加
-│   │   └── sampleData.ts       # config対応
-│   ├── hooks/
-│   │   └── useLotoData.ts      # gameType引数対応、キャッシュ分離
-│   ├── components/
-│   │   ├── Header.tsx           # ゲーム切り替えタブ追加
-│   │   ├── GameSelector.tsx     # 【新規】ゲーム選択タブコンポーネント
-│   │   ├── LotoBall.tsx         # 動的カラーリング
-│   │   └── Disclaimer.tsx
-│   └── pages/
-│       ├── DashboardPage.tsx    # config props対応
-│       ├── AnalysisPage.tsx     # config props対応
-│       ├── PredictionPage.tsx   # config props対応
-│       └── HistoryPage.tsx      # config props対応
-└── dist/
-```
-
-### 2.7 実装の優先順序
-
-Claude Codeで以下の順序で実装すること:
-
-1. **types.ts**: `GameType`, `GameConfig`, `GAME_CONFIGS` を追加、`LotoResult.bonus` を `number | number[]` に
-2. **analysis.ts**: 全関数に `config: GameConfig` 引数を追加、ハードコード定数を除去
-3. **prediction.ts**: 同上。LSTM入力次元を `config.maxNumber` に
-4. **sampleData.ts**: `generateSampleData(config)` に変更
-5. **fetch-results.ts**: ゲーム別分岐、ロト7・ミニロトのパーサー追加
-6. **useLotoData.ts**: `gameType` 引数対応、キャッシュキー分離
-7. **App.tsx**: `gameType` state 追加、config を全ページに渡す
-8. **GameSelector.tsx**: 新規作成（ゲーム切り替えタブ）
-9. **Header.tsx**: GameSelector を組み込み
-10. **LotoBall.tsx**: 動的カラーリング対応
-11. **各ページ**: config props 対応（表示テキスト、カウントダウン等）
-12. **index.css**: CSS変数によるテーマカラー動的切替
-13. **ビルド確認**: `npm run build` が通ることを確認
-14. **プロジェクト名変更**: `loto-analyzer` にリネーム（package.json, index.html等）
-
----
-
-## Part 3: 残タスク（Claude Codeで実行すること）
-
-### Phase 1: ロト系統合（上記 2.7 の手順）
-上記の設計仕様に従い、ロト6単体アプリをロト6・ロト7・ミニロトの3ゲーム対応に拡張する。
-
-### Phase 2: GitHubリポジトリ作成 & Push
-```bash
-cd loto-analyzer
-git init
-git add .
-git commit -m "feat: ロト系アナライザー（ロト6・ロト7・ミニロト統合）"
-gh repo create loto-analyzer --public --source=. --push
-```
-
-### Phase 3: Netlifyデプロイ
-```bash
-npm install -g netlify-cli
-netlify login
-netlify init
-# ビルドコマンド: npm run build
-# 公開ディレクトリ: dist
-# Netlify Functionsディレクトリ: netlify/functions
-```
-
-### Phase 4: 動作確認
-- `npm run build` が正常に完了すること
-- 3ゲームすべてのデータ取得が動作すること
-- ゲーム切り替えがスムーズに動作すること
-- LSTM予測が各ゲームで30秒程度で完了すること（UIフリーズなし）
-- モバイルレスポンシブが維持されていること
-
----
+Netlifyビルド時にSupabaseを使う場合:
+- `VITE_SUPABASE_URL`: https://jvikgmqtzprwsxozulvx.supabase.co
+- `VITE_SUPABASE_ANON_KEY`: Anon Key
 
 ## ビルド & 実行
 
 ```bash
 npm install
-npm run dev      # 開発サーバー (localhost:5173)
+npm run dev      # 開発サーバー
 npm run build    # 本番ビルド → dist/
-npm run preview  # ビルド確認
+node scripts/update-data.mjs  # 手動データ更新
 ```
 
 ## 注意事項
 
 - `tsconfig.app.json` の設定（verbatimModuleSyntax等）は変更しないこと
 - TensorFlow.js のUIフリーズ対策（yieldToMain、エポック間yield）は必ず維持すること
-- `dist/` フォルダは既にビルド済み（ロト6のみ）。統合後に再ビルドが必要
-- Netlify Functionsは `netlify/functions/` に配置。`netlify dev` でローカルテスト可能
+- .env は gitignore 対象。Netlify環境変数で設定すること
+- デプロイは git push で自動実行される

@@ -1,18 +1,33 @@
 #!/usr/bin/env node
 /**
  * ロトデータ更新スクリプト
- * thekyo.jp から最新の抽選結果を取得し public/data/*.json を更新する。
- * GitHub Actions から週3回（火水金の翌朝）自動実行される。
+ * thekyo.jp から最新の抽選結果を取得し:
+ *   1. public/data/*.json を更新（静的ホスティング用）
+ *   2. Supabase loto_draws テーブルに書き込み（リアルタイムDB用）
  *
+ * GitHub Actions から週3回（火水金の翌朝）自動実行される。
  * 使い方: node scripts/update-data.mjs
+ *
+ * 環境変数（Supabase書き込み用、オプション）:
+ *   SUPABASE_URL         — Supabase プロジェクトURL
+ *   SUPABASE_SERVICE_KEY  — Service Role Key（書き込み権限）
  */
 
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, '..', 'public', 'data');
+
+// Supabase クライアント（環境変数がある場合のみ有効）
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+const supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    : null;
 
 const GAMES = [
   {
@@ -63,9 +78,11 @@ function parseCSV(csv, { pickCount, bonusCount, hasCarryover }) {
 
       const bonusStart = 2 + pickCount;
       let bonus;
+      let bonusArray;
       if (bonusCount === 1) {
         bonus = parseInt(cols[bonusStart]);
         if (isNaN(bonus)) continue;
+        bonusArray = [bonus];
       } else {
         const bonuses = [];
         for (let j = bonusStart; j < bonusStart + bonusCount; j++) {
@@ -74,6 +91,7 @@ function parseCSV(csv, { pickCount, bonusCount, hasCarryover }) {
         }
         if (bonuses.length !== bonusCount) continue;
         bonus = bonuses;
+        bonusArray = bonuses;
       }
 
       const afterBonus = bonusStart + bonusCount;
@@ -95,6 +113,7 @@ function parseCSV(csv, { pickCount, bonusCount, hasCarryover }) {
         date,
         numbers,
         bonus,
+        bonusArray,
         firstPrize,
         firstWinners,
         carryover,
@@ -105,6 +124,42 @@ function parseCSV(csv, { pickCount, bonusCount, hasCarryover }) {
     }
   }
   return results;
+}
+
+/**
+ * Supabase loto_draws テーブルへ upsert
+ */
+async function syncToSupabase(gameId, data) {
+  if (!supabase) return;
+
+  try {
+    // loto_draws テーブルのスキーマに合わせて変換
+    const rows = data.map((r) => ({
+      draw_type: gameId,
+      draw_no: r.round,
+      draw_date: r.date,
+      numbers: r.numbers,
+      bonus_numbers: r.bonusArray,
+      prize_1: r.firstPrize,
+      winners_1: r.firstWinners,
+      carryover: r.carryover,
+    }));
+
+    // 100件ずつバッチ upsert（draw_type + draw_no でユニーク）
+    const BATCH = 100;
+    let upserted = 0;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const batch = rows.slice(i, i + BATCH);
+      const { error } = await supabase
+        .from('loto_draws')
+        .upsert(batch, { onConflict: 'draw_type,draw_no' });
+      if (error) throw error;
+      upserted += batch.length;
+    }
+    console.log(`   📡 Supabase: ${upserted} rows upserted`);
+  } catch (err) {
+    console.error(`   ⚠️  Supabase sync failed: ${err.message}`);
+  }
 }
 
 async function fetchGame(game) {
@@ -132,9 +187,11 @@ async function fetchGame(game) {
 
     if (data.length === 0) throw new Error('パース結果が空');
 
+    // 静的JSONに保存（bonusArrayは除外）
+    const jsonData = data.map(({ bonusArray, ...rest }) => rest);
     const output = {
       success: true,
-      data,
+      data: jsonData,
       lastUpdated: new Date().toISOString(),
       source: 'self-hosted',
       totalRecords: data.length,
@@ -143,6 +200,10 @@ async function fetchGame(game) {
 
     writeFileSync(outPath, JSON.stringify(output));
     console.log(`✅ ${game.id}: ${data.length} records updated`);
+
+    // Supabase に同期
+    await syncToSupabase(game.id, data);
+
     return true;
   } catch (err) {
     console.error(`❌ ${game.id}: ${err.message}`);
@@ -157,6 +218,12 @@ async function main() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
   console.log(`🎱 ロトデータ更新開始: ${new Date().toISOString()}`);
+  if (supabase) {
+    console.log('📡 Supabase 同期: 有効');
+  } else {
+    console.log('📡 Supabase 同期: 無効（環境変数未設定）');
+  }
+
   const results = await Promise.all(GAMES.map(fetchGame));
   const allOk = results.every(Boolean);
 
