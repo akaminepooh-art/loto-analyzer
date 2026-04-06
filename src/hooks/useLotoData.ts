@@ -51,11 +51,33 @@ export function useLotoData(gameType: GameType) {
     // 1. Supabase からデータ取得を試行
     if (supabase) {
       try {
-        const { data: rows, error: sbError } = await supabase
-          .from('loto_draws')
-          .select('*')
-          .eq('draw_type', DRAW_TYPE_MAP[gameType])
-          .order('draw_no', { ascending: true });
+        // Supabaseデフォルト上限1000行を回避するためページネーションで全件取得
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allRows: any[] = [];
+        let from = 0;
+        const PAGE_SIZE = 1000;
+        let hasMore = true;
+        let sbError = null;
+
+        while (hasMore) {
+          const { data: rows, error } = await supabase
+            .from('loto_draws')
+            .select('*')
+            .eq('draw_type', DRAW_TYPE_MAP[gameType])
+            .order('draw_no', { ascending: true })
+            .range(from, from + PAGE_SIZE - 1);
+
+          if (error) { sbError = error; break; }
+          if (rows && rows.length > 0) {
+            allRows.push(...rows);
+            from += PAGE_SIZE;
+            hasMore = rows.length === PAGE_SIZE;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        const rows = allRows;
 
         if (!sbError && rows && rows.length > 0) {
           const mapped: LotoResult[] = rows.map((r) => ({
