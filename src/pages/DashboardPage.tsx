@@ -96,9 +96,9 @@ export default function DashboardPage({ data, source, config, onNavigate }: Prop
           )}
         </GlassCard>
         <GlassCard animate stagger={2} className="p-5">
-          <div className="text-sm text-text-secondary mb-1">データソース</div>
-          <div className="text-2xl font-bold text-text-primary">{source}</div>
-          <div className="text-sm text-text-secondary mt-1">{config.name} 全{data.length}回</div>
+          <div className="text-sm text-text-secondary mb-1">データ件数</div>
+          <div className="text-2xl font-bold text-text-primary">{data.length}<span className="text-base font-normal ml-1">回分</span></div>
+          <div className="text-sm text-text-secondary mt-1">{config.name}の全抽選結果</div>
         </GlassCard>
         <GlassCard animate stagger={3} className="p-5">
           <div className="text-sm text-text-secondary mb-1">連番出現率</div>
